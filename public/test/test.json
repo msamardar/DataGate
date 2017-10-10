@@ -1,0 +1,103 @@
+{
+  "name": "Report",
+  "children": [
+    {
+      "name": "NVPN",
+      "children": [
+        {
+          "name": "pattern",
+          "children": [
+            {
+              "name": "test1.csv",
+              "size": "20"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "DUTY",
+      "children": [
+        {
+          "name": "enum",
+          "children": [
+            {
+              "name": "test1.csv",
+              "size": "4"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "STATION",
+      "children": [
+        {
+          "name": "enum",
+          "children": [
+            {
+              "name": "test1.csv",
+              "size": "4"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "PRODUCTION_FAIL_TIME",
+      "children": [
+        {
+          "name": "pattern",
+          "children": [
+            {
+              "name": "test1.csv",
+              "size": "4"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "SN",
+      "children": [
+        {
+          "name": "maxLength",
+          "children": [
+            {
+              "name": "test1.csv",
+              "size": "4"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "'ERRORCODE IN PRODUCTION']",
+      "children": [
+        {
+          "name": "enum",
+          "children": [
+            {
+              "name": "test1.csv",
+              "size": "1"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "REASONCODE",
+      "children": [
+        {
+          "name": "pattern",
+          "children": [
+            {
+              "name": "test1.csv",
+              "size": "1"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

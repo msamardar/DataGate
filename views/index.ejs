@@ -1,0 +1,296 @@
+<div id="page-wrapper">
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-lg-12">
+                <h1 class="page-header"><i class="fa fa-home"></i> Home</h1>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <form action="/validate" method="POST" enctype="multipart/form-data" name="validation-form">
+                <div class="row form-group">
+                    <div class="col-xs-12">
+                        <label>Select Data Files</label>
+                    </div>
+                    <div class="col-xs-7">
+                        <select required class="form-control" name="data_file">
+                            <option value="">--Select--</option>
+                            <% if(false){ %>
+                            <option value="gdrive">Google Drive</option>
+                            <% } %>
+                            <option value="local">Local</option>
+                        </select>
+                    </div>
+                    <div id="file_browse" class="col-xs-5">
+                    </div>
+                </div>
+                <div class="row form-group">
+                    <div class="col-xs-12">
+                        <label>Select Specs</label>
+                    </div>
+                    <div class="col-xs-7">
+                        <select required class="form-control" name="spec_file">
+                            <option value="">--Select--</option>
+                            <option value="gdrive">Select From Google Drive</option>
+                            <% if(false){ %>
+                            <option value="new">Upload New Spec</option>
+                            <option value="failure">Failure Analysis</option>
+                            <option value="systest">System Tests</option>
+                            <option value="shipment">Shipment</option>
+                            <% } %>
+                        </select>
+                    </div>
+                    <div class="col-xs-5" id="sepc_browse"></div>
+
+                </div>
+                <div class="row form-group">
+                    <div class="col-xs-12">
+                        <label>Select Destination</label>
+                    </div>
+                    <div class="col-xs-7">
+                        <select required class="form-control" name="destination">
+                            <option value="">--Select--</option>
+                            <% if(false){ %>
+                            <option value="local">Local</option>
+                            <% } %>
+                            <option value="gdrive">Google Drive</option>
+                        </select>
+                    </div>
+                    <div class="col-xs-5" id="dest_browse">
+
+                    </div>
+
+                </div>
+                <div class="row form-group">
+                    <div class="col-xs-3 col-xs-offset-4">
+                        <span id="done" class="hidden" style="color: green; font-weight: bold; margin-left: 28%;"> Done... </span>
+                        <button class="form-control form-group btn btn-primary" type="submit">Start Validation
+                        </button>
+                    </div>
+                </div>
+            </form>
+            <br>
+            <div class="col-xs-3 col-xs-offset-4">
+                <a id="view" class="btn btn-primary btn-block hidden" target="_blank">View Data</a>
+                <a id="explore" class="btn btn-primary btn-block hidden">Explore</a>
+                <a href="http://localhost:3000/" id="donebtn" class="btn btn-primary btn-block hidden">Refresh</a>
+            </div>
+
+        </div>
+        <div id="graph_div" class="col-xs-4 hidden">
+        </div>
+    </div>
+</div>
+<script src="js/sunbrust.js"></script>
+<script>
+    String.prototype.replaceAll = function (str1, str2, ignore) {
+        return this.replace(new RegExp(str1.replace(/([\/\,\!\\\^\$\{\}\[\]\(\)\.\*\+\?\|\<\>\-\&])/g, "\\$&"), (ignore ? "gi" : "g")), (typeof(str2) == "string") ? str2.replace(/\$/g, "$$$$") : str2);
+    }
+    // gdrive file picker
+    var clientId = "<%= gapi.CLIENT_ID %>";
+    var appId = "<%= gapi.APP_ID %>";
+    var scope = ['https://www.googleapis.com/auth/drive'];
+    var pickerApiLoaded = false;
+    var oauthToken = '';
+
+    function createPicker(type) {
+        if (type == "spec") {
+            if (pickerApiLoaded && oauthToken) {
+                var view = new google.picker.DocsView()
+                    .setIncludeFolders(true)
+                    .setMimeTypes("application/vnd.google-apps.spreadsheet");
+                var picker = new google.picker.PickerBuilder()
+                    .enableFeature(google.picker.Feature.NAV_HIDDEN)
+                    .setAppId(appId)
+                    .setOAuthToken(oauthToken)
+                    .addView(view)
+                    .setCallback(function (data) {
+                        if (data.action == google.picker.Action.PICKED) {
+                            $("[name='" + type + "']").val(data.docs[0].id);
+                            $("#specfile").html("Selected File: <b>" + data.docs[0].name + "</b>");
+                        }
+                    })
+                    .build();
+                picker.setVisible(true);
+            }
+        } else if (type == "dest") {
+            var docsView = new google.picker.DocsView()
+                .setIncludeFolders(true)
+                .setMimeTypes('application/vnd.google-apps.folder')
+                .setSelectFolderEnabled(true);
+            var picker = new google.picker.PickerBuilder()
+                .enableFeature(google.picker.Feature.NAV_HIDDEN)
+                .setAppId(appId)
+                .setOAuthToken(oauthToken)
+                .addView(docsView)
+                .setCallback(function (data) {
+                    if (data.action == google.picker.Action.PICKED) {
+                        $("[name='" + type + "']").val(data.docs[0].id);
+                        $("#destfile").html("Selected Folder: <b>" + data.docs[0].name + "</b>");
+                    }
+                })
+                .build();
+            picker.setVisible(true);
+        }
+    }
+
+    function gdrivePicker(input) {
+        var type = $(input).attr("name");
+        $("[name='" + type + "']").val('');
+        $("[name='" + type + "']").parent().parent().find('p').html('');
+        gapi.load('auth', {
+            'callback': function () {
+                window.gapi.auth.authorize(
+                    {
+                        'client_id': clientId,
+                        'scope': scope,
+                        'immediate': false
+                    },
+                    function (authResult) {
+                        console.log(authResult);
+                        if (authResult && !authResult.error) {
+                            oauthToken = authResult.access_token;
+                            createPicker(type);
+                        }
+                    });
+            }
+        });
+        gapi.load('picker', {
+            'callback': function () {
+                pickerApiLoaded = true;
+//            createPicker(type);
+            }
+        });
+    }
+
+    function showgraph(report_id) {
+        $("#graph_div").removeClass("hidden");
+        $.ajax({
+            url: "/getReportData",
+            type: "POST",
+            dataType: 'json',
+            data: {report_id: report_id},
+            success: function (res) {
+                var nested_data = d3.nest()
+                    .key(function (d) {
+                        return d.ViolatedFiled;
+                    })
+                    .key(function (d) {
+                        return d.ViolationType;
+                    })
+                    .key(function (d) {
+                        return d.FileName;
+                    })
+                    .rollup(function (leaves) {
+                        return "size:" + leaves.length
+                    })
+                    .entries(res.data);
+                nested_data = {key: "Report", values: nested_data};
+                jsonString = JSON.stringify(nested_data);
+                jsonString = jsonString.replaceAll("\"key\":", "\"name\":");
+                jsonString = jsonString.replaceAll("\"values\":", "\"children\":");
+                jsonString = jsonString.replaceAll("\"children\":\"size:", "\"size\":\"");
+                createSunBrust(JSON.parse(jsonString));
+            },
+            error: function (a, b, c) {
+                console.log(a, b, c);
+            },
+        });
+    }
+
+    $().ready(function () {
+        $('form').on("change", 'input[type="file"]', function () {
+            $(this).parent().parent().find("p").html('');
+            var name = document.getElementById('data');
+            // console.log("data"+name.files.item(0).name);
+            $("#datafile").html("Selected File: <b>" + name.files.item(0).name + "</b>");
+        });
+        $('[name="spec_file"]').on("change", function () {
+            if ($(this).val() == 'new') {
+                $("#sepc_browse").html('<label class="btn btn-primary">' +
+                    '    Browse <input type="file" name="spec" style="display: none;">\n' +
+                    '</label><p class="error"></p><p id="specfile"></p>');
+            } else if ($(this).val() == 'gdrive') {
+                $("#sepc_browse").html('<label class="btn btn-primary">' +
+                    '    Browse From Google Drive ' +
+                    '<input type="button" name="spec" style="display: none;" onclick="gdrivePicker(this);">\n' +
+                    '</label><p class="error"></p><p id="specfile"></p>');
+            } else {
+                $("#sepc_browse").html('');
+            }
+        });
+        $('[name="destination"]').on("change", function () {
+            if ($(this).val() == 'local') {
+                $("#dest_browse").html('');
+            } else if ($(this).val() == 'gdrive') {
+                $("#dest_browse").html('<label class="btn btn-primary btn-file">\n' +
+                    '    Browse From Google Drive <input type="button" name="dest" style="display: none;" onclick="gdrivePicker(this);">\n' +
+                    '</label><p class="error"></p><p id="destfile"></p>');
+            } else {
+                $("#dest_browse").html('');
+            }
+        });
+        $('[name="data_file"]').on("change", function () {
+            if ($(this).val() == 'local') {
+                $("#file_browse").html('<label class="btn btn-primary btn-file">\n' +
+                    '    Browse <input type="file" id="data" name="data" style="display: none;" accept=".csv">\n' +
+                    '</label><p class="error"></p><p id="datafile"></p>');
+            } else if ($(this).val() == 'gdrive') {
+                $("#file_browse").html('<label class="btn btn-primary btn-file">\n' +
+                    '    Browse From Google Drive <input type="button" style="display: none;">\n' +
+                    '</label><p class="error"></p><p id="datafile"></p>');
+            } else {
+                $("#file_browse").html('');
+            }
+        });
+
+        $('[name="validation-form"]').validate({
+            errorElement: "span",
+            submitHandler: function (form) {
+
+                var done = $("#done");
+                done.addClass('hidden');
+                $("#view").attr("href", "").addClass('hidden');
+                $("#explore").addClass('hidden');
+                $("#donebtn").addClass('hidden');
+                $("#graph_div").addClass("hidden");
+
+                var submit = $(form).find('[type="submit"]');
+                var done = $("#done");
+                submit.attr('type', 'button').html('validating<i class="fa fa-spinner fa-spin fa-fw fa-lg"></i>');
+                var fd = new FormData($(form)[0]);
+                fd.append("spec", $("[name='spec']").val());
+                fd.append("dest", $("[name='dest']").val());
+                fd.append("token", oauthToken);
+                $.ajax({
+                    url: $(form).attr('action'),
+                    type: $(form).attr('method'),
+                    dataType: 'json',
+                    data: fd,
+                    success: function (res) {
+                        if (!res.status) {
+                            $.each(res.error, function (i, v) {
+                                $("[name='" + i + "']").parent().parent().find("p.error").html(v);
+                            });
+                            submit.attr('type', 'submit').html('Start Validation');
+                        } else {
+                            // submit.html('Done');
+                            done.removeClass('hidden');
+//                            submit.addClass('hidden');
+                            submit.attr('type', 'submit').html('Start Validation');
+                            $("#view").attr("href", res.view_url).removeClass('hidden');
+                            $("#explore").attr('onclick', 'showgraph("' + res.report_id + '");').removeClass('hidden');
+                            $("#donebtn").removeClass('hidden');
+                        }
+
+                    },
+                    error: function (a, b, c) {
+                        console.log(a, b, c);
+                    },
+                    cache: false,
+                    contentType: false,
+                    processData: false
+                });
+            }
+        });
+    });
+</script>

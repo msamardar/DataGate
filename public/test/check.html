@@ -1,0 +1,23 @@
+<script src="http://d3js.org/d3.v3.min.js"></script>
+
+<script>
+    String.prototype.replaceAll = function(str1, str2, ignore)
+    {
+        return this.replace(new RegExp(str1.replace(/([\/\,\!\\\^\$\{\}\[\]\(\)\.\*\+\?\|\<\>\-\&])/g,"\\$&"),(ignore?"gi":"g")),(typeof(str2)=="string")?str2.replace(/\$/g,"$$$$"):str2);
+    }
+    d3.csv("../1502455973991_report.csv", function (error, data) {
+        var nested_data = d3.nest()
+            .key(function(d) { return d.ViolatedFiled; })
+            .key(function(d) { return d.ViolationType; })
+            .key(function(d) { return d.FileName; })
+            .rollup(function(leaves) {return"size:"+leaves.length})
+            .entries(data);
+        nested_data={key:"Report",values:nested_data};
+        jsonString = JSON.stringify(nested_data);
+        jsonString = jsonString.replaceAll("\"key\":", "\"name\":");
+        jsonString = jsonString.replaceAll("\"values\":", "\"children\":");
+        jsonString = jsonString.replaceAll("\"children\":\"size:", "\"size\":\"");
+        console.log(jsonString);
+    });
+
+</script>
