@@ -1,14 +1,12 @@
 var Excel = require('exceljs');
 var Ajv = require('ajv');
-var ajv = new Ajv({allErrors: true, jsonPointers: true, errorDataPath: 'property'});
+var ajv = new Ajv({allErrors: true, jsonPointers: false});
 var CSV = require("fast-csv");
 var fs = require("fs");
 var google = require('googleapis');
 var gapi = require("./gapi.js");
 var moment = require('moment');
 const nodemailer = require('nodemailer');
-var sgTransport = require('nodemailer-sendgrid-transport');
-
 var drive;
 
 module.exports = {
@@ -38,7 +36,7 @@ module.exports = {
                 var require = [];
                 var dependencies = {};
                 dependencies['dependencies'] = {};
-                for (var i = 2; i <= worksheet.actualRowCount; i++) {
+                for (var i = 2; i < worksheet.actualRowCount; i++) {
                     var row = worksheet.getRow(i).values;
                     var propertiesName = row[1];
                     var format = row[8];
@@ -50,12 +48,7 @@ module.exports = {
                         typeObject['type'] = 'string';
                     }
                     else if (format == "Number") {
-                        typeObject['type'] = 'number';
-                    } else if (format == "Timestamp") {
-                        typeObject['type'] = 'string';
-                    }
-                    else if (format == "pattern") {
-                        typeObject['type'] = 'string';
+                        typeObject['type'] = 'integer';
                     }
                     property[propertiesName] = typeObject;
                     var required = row[7];
@@ -65,6 +58,7 @@ module.exports = {
                     try {
                         var values = JSON.parse(row[9]);
                         var keys = Object.keys(values);
+
                         for (var j = 0; j < (keys.length); j++) {
                             if (keys[j] === 'conditional') {
                                 var applyConditionOn = values[keys[j]][0]['condition'].split('=')[0];
@@ -76,7 +70,7 @@ module.exports = {
                                     var p = {};
                                     var obj = {};
                                     var regex = {};
-                                    regex['pattern'] = '^[0-9]{3}-[0-9]{1}' + applyCondition + '-[0-9]{4}-[0-9]{3}$';
+                                    regex['pattern'] = '^[0-9]{3}-[0-9]{2}185-2[0-9]{3}-[0-9]{3}$';
                                     obj['NVPN'] = regex;
                                     p['properties'] = obj;
                                     dependencies['dependencies'][propertiesName] = p;
@@ -115,22 +109,14 @@ module.exports = {
                             }
                             else if (keys[j] === 'format') {
                                 if (values[keys[j]] == "RC*") {
-                                    property[propertiesName]['pattern'] = '^RC.{0,}';
-                                } else if (values[keys[j]] == "*") {
-                                    property[propertiesName]['pattern'] = '^.{0,}';
-                                } else if (values[keys[j]] == "yyyy-MM-dd hh24:mm:sssZZ") {
-                                    property[propertiesName]['pattern'] = '^[0-9]{1,2}/[0-9]{1,2}/[0-9]{4} [0-9]{2}:[0-9]{2}:[0-9]{1,2}[+|:][0-9]{1,4}$';
-                                } else if (values[keys[j]] == "yyyy-MM-dd hh24:mm") {
-                                    property[propertiesName]['pattern'] = '^[0-9]{1,2}/[0-9]{1,2}/[0-9]{4} [0-9]{1,2}:[0-9]{1,2}:[0-9]{1,2} ([AaPp][Mm])$';
-                                } else if (values[keys[j]] == "ddd-ddddd-dddd-ddd") {
-                                    property[propertiesName]['pattern'] = '^[0-9]{3}-[0-9]{5}-[0-9]{4}-[0-9]{3}$';
-                                } else if (values[keys[j]] == "dd.dd.dd.dd.dd") {
-                                    property[propertiesName]['pattern'] = '^[0-9a-zA-Z]{2}.[0-9a-zA-Z]{2}.[0-9a-zA-Z]{2}.[0-9a-zA-Z]{2}.[0-9a-zA-Z]{2}$';
-                                } else if (values[keys[j]] == "[A-Z]dddd-[A-Z]dd-[A-Z]dddd") {
-                                    property[propertiesName]['pattern'] = '^[A-Z][0-9]{4}-[A-Z][0-9]{2}-[A-Z][0-9]{4}$';
+                                    property[propertiesName]['pattern'] = '^RC *';
                                 }
-                            } else if (keys[j] === 'regex') {
-                                property[propertiesName]['pattern'] = values[keys[j]];
+                                else if (values[keys[j]] == "yyyy-MM-dd hh24:mm:sssZZ") {
+                                    property[propertiesName]['pattern'] = '^[0-9]{1,2}/[0-9]{1,2}/[0-9]{4} [0-9]{2}:[0-9]{2}:[0-9]{1,2}[+|:][0-9]{1,4}$';
+                                }
+                                else if (values[keys[j]] == "ddd-ddddd-dddd-ddd") {
+                                    property[propertiesName]['pattern'] = '^[0-9]{3}-[0-9]{5}-[0-9]{4}-[0-9]{3}$';
+                                }
                             }
                         }
                     }
@@ -149,18 +135,53 @@ module.exports = {
                     jsonSchema.required = require;
                 }
                 jsonSchema.dependencies = dependencies['dependencies'];
+                fs.writeFile('./schema.json', JSON.stringify(jsonSchema, null, 2), 'utf-8');
+
                 try {
                     var validate = ajv.compile(jsonSchema);
-                    // console.log(validate.schema)
-                    callback(null, validate)
+                    // console.log(JSON.stringify(jsonSchema));
+                    callback(null, validate);
                 }
                 catch (err) {
+                    console.log(err);
                     callback({msg: "invalid schema. Schema Contains Errors."});
                 }
             }
         });
     },
 
+    uploadSpecFile: function (file, callback) {
+        var file_names = {};
+        var error = false;
+        var ext = file.name.split('.');
+        ext = ext[ext.length - 1];
+        var spec_file_names = "./spec_uploads/" + Date.now() + "." + ext;
+        if (file.type && file.type == "gdrive") {
+            var params1 = {
+                    fileId: file.data,
+                    mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                },
+                params2 = {encoding: null};
+            drive.files.export(params1, params2, function (err, resp) {
+                if (err) {
+                    error = err;
+                    console.log(err);
+                    callback(err);
+                } else {
+                    fs.writeFile(spec_file_names, resp, function (err) {
+                        //counter++;
+                        if (err) {
+                            error = err;
+                            console.log(err);
+                            callback(err);
+                        } else {
+                            callback(null, spec_file_names);
+                        }
+                    });
+                }
+            });
+        }
+    },
     uploadFiles: function (files, callback) {
         var file_names = {};
         var counter = 0;
@@ -169,7 +190,7 @@ module.exports = {
             var file = files[key];
             var ext = file.name.split('.');
             ext = ext[ext.length - 1];
-            file_names[key] = "/tmp/" + Date.now() + "." + ext;
+            file_names[key] = "./uploads/" + Date.now() + "." + ext;
             if (file.type && file.type == "gdrive") {
                 var params1 = {
                         fileId: file.data,
@@ -250,7 +271,7 @@ module.exports = {
                         ViolatedData: row[error.dataPath.substr(1)],
                         errorDetail: JSON.stringify(error.params),
                         errorPath: error.schemaPath.substr(1).split("%20").join(" ")
-                    });
+                    })
                 }
                 invalid_data.push(row);
             }
@@ -260,11 +281,37 @@ module.exports = {
             counter++;
             if (counter == csv.length) {
                 callback(null, {good: valid_data, bad: invalid_data, report: report});
-                // console.log(report);
             }
         });
     },
 
+
+    writeAllReportsFile: function (allReports, path, callback) {
+        var iam = this;
+        let csv_stream = CSV.createWriteStream({headers: true});
+        let fs_stream = fs.createWriteStream(path);
+        for (var i=0; i<allReports.length; i++){
+            var data=allReports[i];
+            csv_stream.pipe(fs_stream);
+            var counter = 0;
+            // if (0 == data.length) {
+            //     csv_stream.end();
+            // }
+            data.forEach(function (row) {
+                csv_stream.write(row);
+                counter++;
+                if ((counter == data.length) && (i == allReports.length - 1)) {
+                    csv_stream.end();
+                }
+            })
+        };
+        try{
+            csv_stream.end();
+        } catch (err){}
+        fs_stream.on("finish", function () {
+            callback(null, "done writing");
+        });
+    },
     writeToFile: function (data, path, gdrive, callback) {
         var iam = this;
         let csv_stream = CSV.createWriteStream({headers: true});
@@ -281,19 +328,17 @@ module.exports = {
                 csv_stream.end();
             }
         })
-        fs_stream.on("error", function (err) {
-            console.log("path :" + path);
-            console.log("error :" + err)
-        });
         fs_stream.on("finish", function () {
             if (gdrive.mail) {
-                var options = {
+                let transporter = nodemailer.createTransport({
+                    host: 'smtp.gmail.com',
+                    port: 587,
+                    secure: false, // secure:true for port 465, secure:false for port 587
                     auth: {
-                        api_key: gapi.SENDGRID_API_KEY
+                        user: 'jsonvalidation@gmail.com',
+                        pass: 'jv123456'
                     }
-                }
-
-                var mailer = nodemailer.createTransport(sgTransport(options));
+                });
 
                 let mailOptions = {
                     from: '"File Validation " <jsonvalidation@gmail.com>', // sender address
@@ -308,13 +353,14 @@ module.exports = {
                         }
                     ]
                 };
-                mailer.sendMail(mailOptions, (error, info) => {
-                    if (error) {
-                        return console.log(error);
-                    }
-                    // console.log(info);
-                    console.log('Email sent.');
-                });
+
+                //     transporter.sendMail(mailOptions, (error, info) = > {
+                //         if(error) {
+                //             return console.log(error);
+                //         }
+                //         console.log('Message %s sent: %s', info.messageId, info.response);
+                // });
+
             }
             if (gdrive.gdrive) {
                 iam.uploadToGDrive(gdrive.path, {folder_id: gdrive.folder_id, name: gdrive.name}, function (err, file) {
